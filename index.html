@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boxing Rumble</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        /* Custom styles for boxing theme and animations */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; /* Dark background */
+        }
+        .health-bar-container {
+            height: 1.5rem;
+            border: 2px solid #fff;
+            background-color: #374151;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
+        }
+        .health-bar {
+            transition: width 0.3s ease-in-out, background-color 0.3s;
+        }
+        .boxer {
+            transition: transform 0.1s ease-out;
+            cursor: default;
+        }
+
+        /* Keyframe animation for punches */
+        @keyframes punch-in {
+            0% { transform: translateX(0); }
+            50% { transform: translateX(20px) scale(1.05); }
+            100% { transform: translateX(0); }
+        }
+        @keyframes punch-out {
+            0% { transform: translateX(0); }
+            50% { transform: translateX(-20px) scale(1.05); }
+            100% { transform: translateX(0); }
+        }
+
+        .player-punch {
+            animation: punch-in 0.3s ease-out;
+        }
+        .system-punch {
+            animation: punch-out 0.3s ease-out;
+        }
+
+        /* Responsive button sizing for mobile */
+        .game-button {
+            padding: 1rem 0.5rem;
+            font-weight: 700;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px #000000;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .game-button:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px #000000;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <!-- Main Game Container -->
+    <div id="gameContainer" class="w-full max-w-xl bg-gray-800 p-6 rounded-xl shadow-2xl border-4 border-yellow-500">
+
+        <!-- 1. Start Screen -->
+        <div id="startScreen" class="flex flex-col items-center justify-center text-center">
+            <h1 class="text-5xl font-extrabold text-yellow-500 mb-6">BOXING RUMBLE</h1>
+            <p class="text-gray-300 text-lg mb-8">30-Second Round: Player vs. System</p>
+            <p class="text-sm text-yellow-400 mb-10 border-b border-yellow-600 pb-2">
+                Mechanics: <span class="font-bold">JAB</span> beats <span class="font-bold">HOOK</span> | <span class="font-bold">HOOK</span> beats <span class="font-bold">UPPERCUT</span> | <span class="font-bold">UPPERCUT</span> beats <span class="font-bold">JAB</span>.
+            </p>
+            <button id="startButton" class="w-2/3 bg-green-600 hover:bg-green-700 text-white text-2xl game-button" onclick="startGame()">
+                START ROUND 1
+            </button>
+        </div>
+
+        <!-- 2. Game Screen -->
+        <div id="gameScreen" class="hidden">
+            <div class="flex justify-between items-center mb-4 text-white text-2xl font-bold">
+                <span id="timerDisplay">30s</span>
+                <span id="roundDisplay" class="text-yellow-400">Round 1</span>
+            </div>
+
+            <!-- Health Bars -->
+            <div class="space-y-4 mb-8">
+                <!-- System Health -->
+                <div>
+                    <div class="text-sm font-semibold text-gray-300 mb-1">System (Opponent)</div>
+                    <div class="health-bar-container rounded-full">
+                        <div id="systemHealth" class="health-bar bg-red-600 h-full rounded-full" style="width: 100%;"></div>
+                    </div>
+                </div>
+                <!-- Player Health -->
+                <div>
+                    <div class="text-sm font-semibold text-gray-300 mb-1 text-right">Player (You)</div>
+                    <div class="health-bar-container rounded-full">
+                        <div id="playerHealth" class="health-bar bg-green-600 h-full rounded-full" style="width: 100%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Boxer Visuals (Movable Characters) -->
+            <div class="flex justify-between items-center text-8xl mb-10">
+                <!-- System Boxer (Facing right) -->
+                <div id="systemBoxer" class="boxer transform scale-x-[-1] text-red-400">🥊</div>
+                <!-- Player Boxer (Facing left) -->
+                <div id="playerBoxer" class="boxer text-green-400">🥊</div>
+            </div>
+
+            <!-- Messages and Last Move Display -->
+            <div id="messageBox" class="text-center h-12 mb-6">
+                <p id="gameMessage" class="text-lg font-bold text-yellow-300"></p>
+                <p id="lastMove" class="text-sm text-gray-400"></p>
+            </div>
+
+            <!-- Control Buttons (Responsive Grid) -->
+            <div class="grid grid-cols-3 gap-3">
+                <button class="bg-blue-600 hover:bg-blue-700 text-white game-button col-span-1 text-base sm:text-lg" onclick="handleMove('jab')">JAB</button>
+                <button class="bg-blue-600 hover:bg-blue-700 text-white game-button col-span-1 text-base sm:text-lg" onclick="handleMove('hook')">HOOK</button>
+                <button class="bg-blue-600 hover:bg-blue-700 text-white game-button col-span-1 text-base sm:text-lg" onclick="handleMove('uppercut')">UPPERCUT</button>
+            </div>
+
+            <div class="flex justify-between mt-4">
+                <button class="bg-gray-600 hover:bg-gray-700 text-white text-sm px-4 py-2 rounded-lg" onclick="togglePause()">
+                    <span id="pauseButtonText">PAUSE</span>
+                </button>
+                <button class="bg-red-700 hover:bg-red-800 text-white text-sm px-4 py-2 rounded-lg" onclick="goToStartScreen()">
+                    GO BACK
+                </button>
+            </div>
+        </div>
+
+        <!-- 3. Game Over Screen -->
+        <div id="gameOverScreen" class="hidden text-center p-6">
+            <h2 id="finalMessage" class="text-4xl font-extrabold text-yellow-500 mb-4"></h2>
+            <p id="scoreSummary" class="text-lg text-gray-300 mb-6"></p>
+            <button class="w-full bg-green-600 hover:bg-green-700 text-white text-xl game-button" onclick="goToStartScreen()">
+                PLAY AGAIN
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Game State Variables ---
+        const MOVE_LOGIC = {
+            'jab': 'hook',      // Jab beats Hook
+            'hook': 'uppercut', // Hook beats Uppercut
+            'uppercut': 'jab'   // Uppercut beats Jab
+        };
+        const MOVES = ['jab', 'hook', 'uppercut'];
+
+        let playerHealth = 100;
+        let systemHealth = 100;
+        const DAMAGE = 15; // Damage dealt on a successful hit
+
+        let timer = 30; // 30 seconds per round
+        let gameInterval;
+        let isPaused = false;
+        let isGameOver = false;
+
+        // --- DOM Elements ---
+        const startScreen = document.getElementById('startScreen');
+        const gameScreen = document.getElementById('gameScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+
+        const playerHealthBar = document.getElementById('playerHealth');
+        const systemHealthBar = document.getElementById('systemHealth');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const gameMessage = document.getElementById('gameMessage');
+        const lastMoveDisplay = document.getElementById('lastMove');
+        const pauseButtonText = document.getElementById('pauseButtonText');
+
+        const playerBoxer = document.getElementById('playerBoxer');
+        const systemBoxer = document.getElementById('systemBoxer');
+
+        // --- Core Game Functions ---
+
+        /**
+         * Converts health percentage to a CSS color string.
+         * @param {number} health - Current health percentage (0-100).
+         * @param {string} type - 'player' or 'system' to determine color transition.
+         */
+        function getHealthColor(health, type) {
+            if (health > 70) return type === 'player' ? 'bg-green-600' : 'bg-red-600';
+            if (health > 30) return 'bg-yellow-500';
+            return 'bg-red-700';
+        }
+
+        /**
+         * Updates the visual health bars.
+         */
+        function updateHealthDisplay() {
+            playerHealth = Math.max(0, playerHealth);
+            systemHealth = Math.max(0, systemHealth);
+
+            playerHealthBar.style.width = `${playerHealth}%`;
+            systemHealthBar.style.width = `${systemHealth}%`;
+
+            // Update colors based on health status
+            playerHealthBar.className = `health-bar h-full rounded-full ${getHealthColor(playerHealth, 'player')}`;
+            systemHealthBar.className = `health-bar h-full rounded-full ${getHealthColor(systemHealth, 'system')}`;
+        }
+
+        /**
+         * Handles the main game loop timer.
+         */
+        function gameLoop() {
+            if (isPaused || isGameOver) return;
+
+            timer--;
+            timerDisplay.textContent = `${timer}s`;
+
+            if (timer <= 0) {
+                endGame('time');
+            }
+        }
+
+        /**
+         * System (AI) chooses a move randomly.
+         * @returns {string} The chosen move ('jab', 'hook', or 'uppercut').
+         */
+        function systemChooseMove() {
+            const randomIndex = Math.floor(Math.random() * MOVES.length);
+            return MOVES[randomIndex];
+        }
+
+        /**
+         * Compares moves and applies damage.
+         * @param {string} playerMove - The player's move.
+         * @param {string} systemMove - The system's move.
+         */
+        function resolveMoves(playerMove, systemMove) {
+            let resultMessage = '';
+            let playerHit = false;
+            let systemHit = false;
+
+            // Check if player beats system
+            if (MOVE_LOGIC[playerMove] === systemMove) {
+                systemHealth -= DAMAGE;
+                resultMessage = 'SUCCESS! You land a hit!';
+                playerHit = true;
+            }
+            // Check if system beats player
+            else if (MOVE_LOGIC[systemMove] === playerMove) {
+                playerHealth -= DAMAGE;
+                resultMessage = 'BLOCKED! System lands a counter!';
+                systemHit = true;
+            }
+            // It's a tie
+            else {
+                resultMessage = 'CLASH! Both moves canceled out.';
+            }
+
+            // Animate boxers based on result
+            animateBoxers(playerHit, systemHit);
+
+            // Update UI
+            updateHealthDisplay();
+            gameMessage.textContent = resultMessage;
+            lastMoveDisplay.textContent = `You: ${playerMove.toUpperCase()} | System: ${systemMove.toUpperCase()}`;
+
+            // Check for game end condition
+            if (playerHealth <= 0 || systemHealth <= 0) {
+                endGame('KO');
+            }
+        }
+
+        /**
+         * Adds and removes CSS classes to simulate punching animation.
+         * @param {boolean} playerHit - True if the player's move was effective.
+         * @param {boolean} systemHit - True if the system's move was effective.
+         */
+        function animateBoxers(playerHit, systemHit) {
+            // Player Animation (only punch if successful or if player moved)
+            if (playerHit || systemHit) {
+                playerBoxer.classList.add('player-punch');
+                systemBoxer.classList.add('system-punch');
+            }
+
+            // Remove animation classes after the duration
+            setTimeout(() => {
+                playerBoxer.classList.remove('player-punch');
+                systemBoxer.classList.remove('system-punch');
+            }, 300);
+        }
+
+        // --- Event Handlers ---
+
+        /**
+         * Called when a player clicks a move button.
+         * @param {string} move - 'jab', 'hook', or 'uppercut'.
+         */
+        function handleMove(move) {
+            if (isPaused || isGameOver) return;
+
+            const systemMove = systemChooseMove();
+            resolveMoves(move, systemMove);
+        }
+
+        /**
+         * Starts the game, initializes state, and sets up the timer.
+         */
+        function startGame() {
+            // Reset state
+            playerHealth = 100;
+            systemHealth = 100;
+            timer = 30;
+            isPaused = false;
+            isGameOver = false;
+
+            // Clear previous interval
+            if (gameInterval) clearInterval(gameInterval);
+
+            // Set up new game
+            updateHealthDisplay();
+            timerDisplay.textContent = `${timer}s`;
+            gameMessage.textContent = 'Fight!';
+            lastMoveDisplay.textContent = 'Choose your move!';
+            pauseButtonText.textContent = 'PAUSE';
+
+            // Show game screen, hide others
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+
+            // Start the timer loop (updates every second)
+            gameInterval = setInterval(gameLoop, 1000);
+        }
+
+        /**
+         * Toggles the pause state of the game.
+         */
+        function togglePause() {
+            if (isGameOver) return;
+            isPaused = !isPaused;
+            pauseButtonText.textContent = isPaused ? 'RESUME' : 'PAUSE';
+            gameMessage.textContent = isPaused ? 'Round Paused.' : 'Fight!';
+        }
+
+        /**
+         * Ends the current game round.
+         * @param {string} reason - 'time' or 'KO'.
+         */
+        function endGame(reason) {
+            if (isGameOver) return; // Prevent calling multiple times
+            isGameOver = true;
+            clearInterval(gameInterval);
+
+            // Determine winner
+            let finalMsg = '';
+            if (playerHealth > systemHealth) {
+                finalMsg = (reason === 'KO' ? 'KNOCKOUT! YOU WIN!' : 'TIME! YOU WIN on Health!');
+            } else if (systemHealth > playerHealth) {
+                finalMsg = (reason === 'KO' ? 'KNOCKOUT! SYSTEM WINS!' : 'TIME! SYSTEM WINS on Health!');
+            } else {
+                finalMsg = 'DRAW! Both fighters are standing.';
+            }
+
+            document.getElementById('finalMessage').textContent = finalMsg;
+            document.getElementById('scoreSummary').textContent = `Final Score: You ${playerHealth} vs System ${systemHealth}`;
+
+            // Show Game Over screen
+            gameScreen.classList.add('hidden');
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        /**
+         * Resets the game and returns to the start screen.
+         */
+        function goToStartScreen() {
+            if (gameInterval) clearInterval(gameInterval);
+            gameInterval = null;
+            isGameOver = true; // Ensure any active game process stops
+
+            // Show start screen, hide others
+            startScreen.classList.remove('hidden');
+            gameScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+        }
+
+        // Initialize the game on load to show the start screen
+        window.onload = goToStartScreen;
+
+    </script>
+</body>
+</html>
