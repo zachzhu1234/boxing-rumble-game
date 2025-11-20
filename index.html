@@ -22,28 +22,16 @@
         .health-bar {
             transition: width 0.3s ease-in-out, background-color 0.3s;
         }
-        .boxer {
-            transition: transform 0.1s ease-out;
-            cursor: default;
+
+        /* --- Pop-Out Animation for Move Result --- */
+        @keyframes pop-out-anim {
+            0% { opacity: 0; transform: scale(0.5); }
+            20% { opacity: 1; transform: scale(1.1); }
+            100% { opacity: 0; transform: scale(1.5); }
         }
 
-        /* Keyframe animation for punches */
-        @keyframes punch-in {
-            0% { transform: translateX(0); }
-            50% { transform: translateX(20px) scale(1.05); }
-            100% { transform: translateX(0); }
-        }
-        @keyframes punch-out {
-            0% { transform: translateX(0); }
-            50% { transform: translateX(-20px) scale(1.05); }
-            100% { transform: translateX(0); }
-        }
-
-        .player-punch {
-            animation: punch-in 0.3s ease-out;
-        }
-        .system-punch {
-            animation: punch-out 0.3s ease-out;
+        .pop-out {
+            animation: pop-out-anim 0.5s ease-out forwards;
         }
 
         /* Responsive button sizing for mobile */
@@ -102,12 +90,10 @@
                 </div>
             </div>
 
-            <!-- Boxer Visuals (Movable Characters) -->
-            <div class="flex justify-between items-center text-8xl mb-10">
-                <!-- System Boxer (Facing right) -->
-                <div id="systemBoxer" class="boxer transform scale-x-[-1] text-red-400">🥊</div>
-                <!-- Player Boxer (Facing left) -->
-                <div id="playerBoxer" class="boxer text-green-400">🥊</div>
+            <!-- Result Visual Feedback Area -->
+            <div class="flex justify-center items-center h-28 sm:h-32 mb-6 relative">
+                <!-- Placeholder for the actual visual effect -->
+                <div id="resultVisual" class="absolute text-6xl font-black text-center" style="opacity: 0;"></div>
             </div>
 
             <!-- Messages and Last Move Display -->
@@ -152,6 +138,14 @@
             'uppercut': 'jab'   // Uppercut beats Jab
         };
         const MOVES = ['jab', 'hook', 'uppercut'];
+        
+        // Emojis for the visual feedback
+        const PLAYER_PUNCH_EMOJI = '🤜';
+        const SYSTEM_PUNCH_EMOJI = '🤛';
+        const IMPACT_EMOJI = '💥';
+        const SHIELD_EMOJI = '🛡️';
+        const DRAW_EMOJI = '🥊🥊';
+
 
         let playerHealth = 100;
         let systemHealth = 100;
@@ -173,16 +167,14 @@
         const gameMessage = document.getElementById('gameMessage');
         const lastMoveDisplay = document.getElementById('lastMove');
         const pauseButtonText = document.getElementById('pauseButtonText');
+        const resultVisual = document.getElementById('resultVisual');
+        const moveButtons = document.querySelectorAll('.grid button');
 
-        const playerBoxer = document.getElementById('playerBoxer');
-        const systemBoxer = document.getElementById('systemBoxer');
 
         // --- Core Game Functions ---
 
         /**
          * Converts health percentage to a CSS color string.
-         * @param {number} health - Current health percentage (0-100).
-         * @param {string} type - 'player' or 'system' to determine color transition.
          */
         function getHealthColor(health, type) {
             if (health > 70) return type === 'player' ? 'bg-green-600' : 'bg-red-600';
@@ -221,11 +213,59 @@
 
         /**
          * System (AI) chooses a move randomly.
-         * @returns {string} The chosen move ('jab', 'hook', or 'uppercut').
          */
         function systemChooseMove() {
             const randomIndex = Math.floor(Math.random() * MOVES.length);
             return MOVES[randomIndex];
+        }
+
+        /**
+         * Temporarily disables move buttons to prevent spamming during animation.
+         */
+        function disableControls(duration = 500) {
+            moveButtons.forEach(btn => btn.disabled = true);
+            setTimeout(() => {
+                if (!isPaused && !isGameOver) {
+                    moveButtons.forEach(btn => btn.disabled = false);
+                }
+            }, duration);
+        }
+
+        /**
+         * Generates and plays the pop-out animation for the result.
+         * @param {string} playerMove - The player's move.
+         * @param {string} systemMove - The system's move.
+         * @param {string} outcome - 'win', 'lose', or 'draw'.
+         */
+        function showResultVisual(playerMove, systemMove, outcome) {
+            let visualHTML = '';
+            
+            // Generate the visual based on the outcome
+            if (outcome === 'win') {
+                // Player wins: Player's fist, their winning move, and impact.
+                visualHTML = `<span class="text-green-400">${PLAYER_PUNCH_EMOJI}</span> <span class="text-4xl font-extrabold text-white">${playerMove.toUpperCase()}</span> <span class="text-yellow-400">${IMPACT_EMOJI}</span>`;
+            } else if (outcome === 'lose') {
+                // Player loses: System's fist (opposing/flipped), system's winning move, and block.
+                visualHTML = `<span class="text-red-500">${SYSTEM_PUNCH_EMOJI}</span> <span class="text-4xl font-extrabold text-white">${systemMove.toUpperCase()}</span> <span class="text-gray-400">${SHIELD_EMOJI}</span>`;
+            } else {
+                // Draw: Neutral clash.
+                visualHTML = `<span class="text-gray-500">${DRAW_EMOJI}</span> <span class="text-xl font-normal text-white">CLASH</span>`;
+            }
+
+            resultVisual.innerHTML = visualHTML;
+            
+            // Apply animation classes
+            resultVisual.classList.remove('pop-out');
+            resultVisual.style.opacity = '0';
+            // Trigger reflow/repaint to ensure animation resets
+            void resultVisual.offsetWidth; 
+            resultVisual.classList.add('pop-out');
+
+            // Clear visual after animation completes
+            setTimeout(() => {
+                resultVisual.style.opacity = '0';
+                resultVisual.classList.remove('pop-out');
+            }, 500);
         }
 
         /**
@@ -235,28 +275,29 @@
          */
         function resolveMoves(playerMove, systemMove) {
             let resultMessage = '';
-            let playerHit = false;
-            let systemHit = false;
+            let outcome = 'draw';
 
             // Check if player beats system
             if (MOVE_LOGIC[playerMove] === systemMove) {
                 systemHealth -= DAMAGE;
-                resultMessage = 'SUCCESS! You land a hit!';
-                playerHit = true;
+                resultMessage = 'SUCCESS! Your ' + playerMove.toUpperCase() + ' lands!';
+                outcome = 'win';
             }
             // Check if system beats player
             else if (MOVE_LOGIC[systemMove] === playerMove) {
                 playerHealth -= DAMAGE;
-                resultMessage = 'BLOCKED! System lands a counter!';
-                systemHit = true;
+                resultMessage = 'BLOCKED! System counters with a ' + systemMove.toUpperCase() + '!';
+                outcome = 'lose';
             }
             // It's a tie
             else {
                 resultMessage = 'CLASH! Both moves canceled out.';
+                outcome = 'draw';
             }
 
-            // Animate boxers based on result
-            animateBoxers(playerHit, systemHit);
+            // Show the pop-out visual feedback
+            showResultVisual(playerMove, systemMove, outcome);
+            disableControls(); // Lock controls for the duration of the animation
 
             // Update UI
             updateHealthDisplay();
@@ -269,25 +310,6 @@
             }
         }
 
-        /**
-         * Adds and removes CSS classes to simulate punching animation.
-         * @param {boolean} playerHit - True if the player's move was effective.
-         * @param {boolean} systemHit - True if the system's move was effective.
-         */
-        function animateBoxers(playerHit, systemHit) {
-            // Player Animation (only punch if successful or if player moved)
-            if (playerHit || systemHit) {
-                playerBoxer.classList.add('player-punch');
-                systemBoxer.classList.add('system-punch');
-            }
-
-            // Remove animation classes after the duration
-            setTimeout(() => {
-                playerBoxer.classList.remove('player-punch');
-                systemBoxer.classList.remove('system-punch');
-            }, 300);
-        }
-
         // --- Event Handlers ---
 
         /**
@@ -295,7 +317,7 @@
          * @param {string} move - 'jab', 'hook', or 'uppercut'.
          */
         function handleMove(move) {
-            if (isPaused || isGameOver) return;
+            if (isPaused || isGameOver || moveButtons[0].disabled) return;
 
             const systemMove = systemChooseMove();
             resolveMoves(move, systemMove);
@@ -312,7 +334,6 @@
             isPaused = false;
             isGameOver = false;
 
-            // Clear previous interval
             if (gameInterval) clearInterval(gameInterval);
 
             // Set up new game
@@ -321,13 +342,14 @@
             gameMessage.textContent = 'Fight!';
             lastMoveDisplay.textContent = 'Choose your move!';
             pauseButtonText.textContent = 'PAUSE';
+            moveButtons.forEach(btn => btn.disabled = false); 
 
             // Show game screen, hide others
             startScreen.classList.add('hidden');
             gameOverScreen.classList.add('hidden');
             gameScreen.classList.remove('hidden');
 
-            // Start the timer loop (updates every second)
+            // Start the timer loop 
             gameInterval = setInterval(gameLoop, 1000);
         }
 
@@ -339,16 +361,18 @@
             isPaused = !isPaused;
             pauseButtonText.textContent = isPaused ? 'RESUME' : 'PAUSE';
             gameMessage.textContent = isPaused ? 'Round Paused.' : 'Fight!';
+            // Disable controls if paused
+            moveButtons.forEach(btn => btn.disabled = isPaused);
         }
 
         /**
          * Ends the current game round.
-         * @param {string} reason - 'time' or 'KO'.
          */
         function endGame(reason) {
-            if (isGameOver) return; // Prevent calling multiple times
+            if (isGameOver) return; 
             isGameOver = true;
             clearInterval(gameInterval);
+            moveButtons.forEach(btn => btn.disabled = true); 
 
             // Determine winner
             let finalMsg = '';
@@ -374,7 +398,7 @@
         function goToStartScreen() {
             if (gameInterval) clearInterval(gameInterval);
             gameInterval = null;
-            isGameOver = true; // Ensure any active game process stops
+            isGameOver = true; 
 
             // Show start screen, hide others
             startScreen.classList.remove('hidden');
